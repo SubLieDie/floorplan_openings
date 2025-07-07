@@ -59,7 +59,7 @@
 1. **Клонируйте репозиторий:**
    ```bash
    git clone https://github.com/SubLieDie/floorplan_openings.git
-   cd floorplan_openings/Docker
+   cd floorplan_openings
    ```
    
 2. **Поместите обученную модель в папку Docker/ под именем model.pt.**

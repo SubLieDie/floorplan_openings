@@ -1,5 +1,5 @@
-torch
+torch==2.7.1
 torchvision
 pillow
-gradio
-ultralytics
+gradio==5.35.0
+ultralytics==8.3.162
