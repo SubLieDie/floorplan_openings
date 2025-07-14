@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/) [![Docker](https://img.shields.io/badge/docker-20.10-blue)](https://www.docker.com/) [![Gradio](https://img.shields.io/badge/gradio-4.44.1-orange)](https://gradio.app/) [![Ultralytics YOLO](https://img.shields.io/badge/YOLO-ultralytics-yellow)](https://github.com/ultralytics/ultralytics)
 
-**Автоматическое обнаружение окон и дверей на архитектурных планах** с использованием YOLOv8 и интерактивным веб-интерфейсом.
+**Автоматическое обнаружение окон и дверей на архитектурных планах** с использованием YOLOv11 и интерактивным веб-интерфейсом.
 
 ---
 
