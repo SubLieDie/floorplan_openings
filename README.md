@@ -43,8 +43,10 @@
 
 * Python 3.10
 * Docker >= 20.10
-* NVIDIA GPU (опционально)
+* CUDA 12.1, драйвер NVIDIA >= 530.30
 * Обученная модель YOLO в формате `.pt`
+* Torch с поддержкой GPU под нужную версию CUDA:
+  - Пример: `pip install torch==2.1.2+cu121 torchvision==0.16.2+cu121 -f https://download.pytorch.org/whl/torch_stable.html`
 * Зависимости из `requirements.txt`:
 	- torch==2.7.1
 	- torchvision
