@@ -8,6 +8,7 @@ from datetime import datetime
 import glob
 import zipfile
 from bs4 import BeautifulSoup
+from PIL import ImageColor
 
 # Путь к шрифту в контейнере
 FONT_PATH = "/fonts/Arial.ttf"
@@ -46,32 +47,62 @@ def load_font():
 
 
 def detect_objects(image: Image.Image):
-    """Основная функция обработки изображения"""
+    """Обработка изображения с восстановлением точных масок YOLO-seg"""
     try:
+        img_w, img_h = image.size
         img_array = np.array(image)
         results = model(img_array)[0]
-        boxes = results.boxes
         names = model.names
+        masks = results.masks
+        boxes = results.boxes
 
-        img_draw = image.copy()
-        draw = ImageDraw.Draw(img_draw)
+        if masks is None or masks.data is None:
+            return image, "⚠ Маски не обнаружены", "<p>Не обнаружено элементов</p>"
+
+        img_draw = image.convert("RGBA").copy()
+        overlay = Image.new("RGBA", image.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(overlay)
         font = load_font()
 
+        mask_data = masks.data.cpu().numpy()
         counts = {"window": 0, "door": 0}
         elements_data = []
 
-        for box in boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            cls = int(box.cls[0])
+        # Определение классов масок
+        if hasattr(masks, 'cls') and masks.cls is not None:
+            mask_classes = masks.cls.cpu().tolist()
+        elif len(mask_data) == len(boxes.cls):
+            mask_classes = boxes.cls.cpu().tolist()
+        else:
+            return image, "⚠ Не удалось определить классы масок", "<p>Ошибка сопоставления масок и классов</p>"
+
+        for i, mask_np in enumerate(mask_data):
+            cls = int(mask_classes[i])
+            conf = float(boxes.conf[i]) if i < len(boxes.conf) else 1.0
             label = names[cls]
-            conf = float(box.conf[0])
 
             if label not in STYLE:
                 continue
 
             counts[label] += 1
-            element_type = STYLE[label]
             number = counts[label]
+            element_type = STYLE[label]
+
+            # Resize mask до оригинального изображения
+            mask_img = Image.fromarray((mask_np * 255).astype(np.uint8)).resize((img_w, img_h), resample=Image.BILINEAR)
+            mask_np_resized = np.array(mask_img) > 127
+
+            # Контурная маска
+            color_rgb = ImageColor.getrgb(element_type["color"])
+            colored_mask = Image.new("RGBA", (img_w, img_h), (*color_rgb, 100))
+            overlay.paste(colored_mask, mask=mask_img)
+
+            # Bounding box и центроид
+            y_indices, x_indices = np.where(mask_np_resized)
+            if len(x_indices) == 0 or len(y_indices) == 0:
+                continue
+            x1, y1, x2, y2 = int(np.min(x_indices)), int(np.min(y_indices)), int(np.max(x_indices)), int(np.max(y_indices))
+            cx, cy = int(np.mean(x_indices)), int(np.mean(y_indices))
 
             elements_data.append({
                 "Тип": element_type["text"],
@@ -81,25 +112,24 @@ def detect_objects(image: Image.Image):
                 "Уверенность": f"{conf:.2f}"
             })
 
-            draw.rectangle([x1, y1, x2, y2], outline=element_type["color"], width=STYLE["border_width"])
+            # Подпись в центр маски
             label_text = f"{element_type['emoji']} {element_type['text']} {number}"
-            text_bbox = draw.textbbox((0, 0), label_text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-            draw.rectangle([x1, y1, x1 + text_width + 6, y1 + text_height + 6], fill="white")
-            draw.text((x1 + 3, y1 + 3), label_text, fill=element_type["color"], font=font)
+            text_bbox = draw.textbbox((cx, cy), label_text, font=font)
+            tw, th = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
+            draw.rectangle([cx, cy, cx + tw + 6, cy + th + 6], fill=(255, 255, 255, 220))
+            draw.text((cx + 3, cy + 3), label_text, fill=element_type["color"], font=font)
 
+        # Финальное изображение
+        img_result = Image.alpha_composite(img_draw, overlay).convert("RGB")
         df = pd.DataFrame(elements_data)
         summary_text = f"✅ Найдено: {counts['window']} окон, {counts['door']} дверей"
-        table_html = df.to_html(index=False, classes="dataframe",
-                                border=0) if not df.empty else "<p>Не обнаружено элементов</p>"
+        table_html = df.to_html(index=False, classes="dataframe", border=0) if not df.empty else "<p>Не обнаружено элементов</p>"
 
-        return img_draw, summary_text, table_html
+        return img_result, summary_text, table_html
 
     except Exception as e:
         error_msg = f"⚠ Ошибка обработки: {str(e)}"
-        return image, error_msg, ""
-
+        return image, error_msg, "<p>Не удалось обработать изображение</p>"
 
 def create_results_zip():
     """Создает ZIP-архив со всеми результатами"""
